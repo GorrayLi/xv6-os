@@ -1,0 +1,15 @@
+
+xv6 kernel is booting
+
+hart 1 starting
+hart 2 starting
+init: starting sh
+$ mkdir 2PsckhPv
+$ echo > 2PsckhPv/WsdeSLnB
+$ mkdir 2PsckhPv/xZht7T5Z
+$ echo > 2PsckhPv/xZht7T5Z/WsdeSLnB
+$ mkdir c7UJK6zI
+$ echo > c7UJK6zI/WsdeSLnB
+$ find . WsdeSLnB
+exec find failed
+$ qemu-system-riscv64: terminating on signal 15 from pid 1127992 (make)

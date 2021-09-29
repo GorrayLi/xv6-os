@@ -1,0 +1,10 @@
+
+xv6 kernel is booting
+
+hart 1 starting
+hart 2 starting
+init: starting sh
+$ echo > 4crZN45s
+$ find . 4crZN45s
+exec find failed
+$ qemu-system-riscv64: terminating on signal 15 from pid 1127960 (make)
