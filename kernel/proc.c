@@ -235,6 +235,8 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+  proc_kernel_uvmcopy(p->pagetable, p->kernel_pagetable, 0, p->sz);
+  
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -257,13 +259,23 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    if (sz + n >= PLIC){
+      return -1;
+    }
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+      return -1;
+    }
+    if (0 != proc_kernel_uvmcopy(p->pagetable, p->kernel_pagetable, p->sz, sz)){
       return -1;
     }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    if (sz < p->sz){
+      uvmunmap(p->kernel_pagetable, PGROUNDUP(sz), (PGROUNDUP(p->sz)-PGROUNDUP(sz))/PGSIZE, 0);
+    }
   }
   p->sz = sz;
+  proc_kvminithart(p->kernel_pagetable);
   return 0;
 }
 
@@ -288,6 +300,13 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  //copy child user mappings to its kernel pagetable
+  if (proc_kernel_uvmcopy(np->pagetable, np->kernel_pagetable, 0, np->sz) != 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;   
+  }
 
   np->parent = p;
 

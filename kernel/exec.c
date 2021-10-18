@@ -112,6 +112,11 @@ exec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
   p->sz = sz;
+
+  if (0 != proc_kernel_uvmcopy(p->pagetable, p->kernel_pagetable, 0, sz))
+    goto bad;
+  proc_kvminithart(p->kernel_pagetable);
+
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);

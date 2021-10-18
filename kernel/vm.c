@@ -223,6 +223,29 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+//create PTEs for virtual addresses starting at va that refer to
+// physical addresses starting at pa, 
+//this func is for process's kernel pagetable
+int
+proc_kmappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+{
+  uint64 a, last;
+  pte_t *pte;
+
+  a = PGROUNDDOWN(va);
+  last = PGROUNDDOWN(va + size - 1);
+  for(;;){
+    if((pte = walk(pagetable, a, 1)) == 0)
+      return -1;
+    *pte = PA2PTE(pa) | perm | PTE_V;
+    if(a == last)
+      break;
+    a += PGSIZE;
+    pa += PGSIZE;
+  }
+  return 0;
+}
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -343,6 +366,35 @@ freewalk(pagetable_t pagetable)
     }
   }
   kfree((void*)pagetable);
+}
+
+// copy mappings for user space to proc's kernel pagetable
+int
+proc_kernel_uvmcopy(pagetable_t user_pagetbl, pagetable_t kernel_pagetbl, int oldsz, int newsz)
+{
+  uint64 a;
+  uint64 pa;
+  uint flags;
+  pte_t *pte;
+  if (newsz < oldsz)
+    return -1;
+  oldsz = PGROUNDUP(oldsz);
+  for (a = oldsz; a < newsz; a += PGSIZE){
+    if ((pte = walk(user_pagetbl, a, 0)) == 0){
+      panic("proc_kernel_uvmcopy: no exist pte");
+    }
+    if ((*pte & PTE_V) == 0){
+      panic("proc_kernel_uvmcopy: invalid pte");
+    }
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+    flags &= (~PTE_U);
+    if (proc_kmappages(kernel_pagetbl, a, PGSIZE, pa, flags) != 0){
+      uvmunmap(kernel_pagetbl, oldsz, (a-oldsz)/PGSIZE, 0);
+      return -1;
+    }
+  }
+  return 0;
 }
 
 // Recursively free page-table pages without free leaf physical memory pages
@@ -485,6 +537,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
+#if 0
   uint64 n, va0, pa0;
 
   while(len > 0){
@@ -502,6 +555,9 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     srcva = va0 + PGSIZE;
   }
   return 0;
+#else
+  return copyin_new(pagetable, dst, srcva, len);
+#endif
 }
 
 // Copy a null-terminated string from user to kernel.
@@ -511,6 +567,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
+#if 0
   uint64 n, va0, pa0;
   int got_null = 0;
 
@@ -545,4 +602,7 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+#else
+  return copyinstr_new(pagetable, dst, srcva, max);
+#endif
 }
