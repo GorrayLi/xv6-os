@@ -236,6 +236,30 @@ userret:
         sret
 ```  
 
+# labs
+## lab1: RISC-V assembly  
+  详见answers-traps.txt。
+
+## lab2: backtrace
+* backtrace打印出函数的调用栈。  
+* 关键点：1、打印出每一级函数调用的return address（根据hint 3, ra = *(fp - 8));  
+          2、打印出本级函数的return address后，需要找到调用本地函数的函数（根据hint 3, saved fp = *(fp - 16)）的fp，打印出其return address，依次循环。
+	  3、循环的退出条件：到达栈底。PGROUNDUP(fp);  
+* 关键代码：
+```C
+void
+backtrace()
+{
+  uint64 fp = r_fp();
+  uint64 stack_ulimit = PGROUNDUP(fp);
+  uint64 i = 0;
+
+  for(i = fp; i != stack_ulimit; i = *(uint64 *)(i - 16)){
+    printf("%p\n", *(uint64 *)(i - 8));    
+  }
+}
+```
+
   
   
   
