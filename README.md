@@ -260,7 +260,80 @@ backtrace()
 }
 ```
 
-  
+## lab3: alarm
+* 增加两个系统调用：sigalarm(interval, handler)和sigreturn(void)，前者功能为以interval个tick为周期，周期性调用handler，其中sigalarm(0,0)表示停止周期性alarm call。调用sigreturn则返回时钟中断到来前的用户代码继续运行。
+* 关键点：1、每个tick到来时，都会因时钟中断trap到内核，因此，我们只需要在usertrap()中对tick数进行计数，达到设定的interval则执行handler,并将tick计数清0；  
+         2、如何进入alarm handler? 可参照系统调用trap到内核并执行完毕后返回到用户空间的方式，即将SEPC寄存器的值（调用ecall前的用户PC）保存在trapframe的epc中，返回前从trapframe中读出SPEC的值就能返回调用syscall之前的位置继续执行。换言之，从内核返回到用户空间的位置，是trapframe的epc决定的，因此从中断返回用户空间，只要把trapframe的epc的值写成alarm handler的地址，返回用户空间后就会执行alarm handler，在alarm handler函数的末尾调用sigreturn，即可保证在执行完alarm handler后回到中断之前的位置。  
+* 1、首先，增加系统调用sigalarm(interval, handler)和sigreturn(void)，方法见syscall那一章，不赘述；  
+  2、在struct proc中增加alarm相关的字段，如下：  
+```C
+  // these are for alarm test
+  int alarm_interval;
+  void (*alarm_handle)();
+  int is_alarm_runing;
+  int ticks;
+  struct trapframe saved_trapframe;
+};
+```  
+  3、sigalarm的实现如下：  
+```C
+uint64
+sys_sigalarm(void)
+{
+  int n;
+  uint64 handle;
+
+  if(argint(0, &n) < 0)
+    return -1;
+  if(argaddr(1, &handle) < 0)
+    return -1;
+  myproc()->alarm_interval = n;
+  myproc()->alarm_handle = (void (*)())handle;
+  myproc()->is_alarm_runing = 0;
+  return 0;
+}
+```  
+  其中，is_alarm_runing标志主要用于防止alarm handle在执行完成前再次去调用它。（题目有此要求）  
+   4、按照题目提示，usertrap中时钟中断处理的代码在if(which_dev == 2)中，故在此处增加tick计数及操纵执行alarm handler的代码，如下：  
+```C
+  // give up the CPU if this is a timer interrupt.
+  if(which_dev == 2){
+    if (!p->is_alarm_runing && (p->alarm_interval > 0)){
+      p->ticks++;
+      if (p->ticks == p->alarm_interval){
+        memmove(&p->saved_trapframe, p->trapframe, sizeof(struct trapframe));
+        p->trapframe->epc = (uint64)p->alarm_handle;
+        p->ticks = 0;
+        p->is_alarm_runing = 1;
+      }
+    }
+    else if (p->alarm_interval == 0){
+      p->ticks = 0;
+    }
+    yield();
+  }
+```  
+   值得注意的是，在将alarm_handle保存到p->trapframe->epc前，需要保存trapframe中所有的寄存器，以防在执行alarm_handle时将其破坏，同时便于在执行sigreturn之后恢复sepc的值，使之返回中断trap到内核之前的位置。另外，p->alarm_interval == 0时对应sigalarm(0,0)的情况，不再执行alarm_handle，同时将tick数清0。  
+   5、sigreturn实现如下：  
+```C
+uint64
+sys_sigreturn(void)
+{
+  memmove(myproc()->trapframe, &myproc()->saved_trapframe, sizeof(struct trapframe));
+  if (myproc()->is_alarm_runing)
+    myproc()->is_alarm_runing = 0;
+  return 0;
+}
+```  
+  6、注意freeproc()中，要alarm相关的字段全部清0，否则跑完alarmtest后，再运行usertests会测试不过。  
+```C
+  p->is_alarm_runing = 0;
+  p->alarm_handle = 0;
+  p->alarm_interval = 0;
+  p->ticks = 0;
+  memset(&p->saved_trapframe, 0, sizeof(struct trapframe));
+```  
+
   
   
   
