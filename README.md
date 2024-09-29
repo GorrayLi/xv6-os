@@ -1,1 +1,1 @@
-# mit-xv6-labs-2020
+# xv6-os based on mit-xv6. 
